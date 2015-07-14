@@ -1,0 +1,190 @@
+#!/bin/bash
+
+SCRIPT_START_TIME=$(date -Iminutes)
+ENVDIR_BIN=$(which envdir)
+
+# envdir_source: Builds an envdir command string for a directory
+# and adds it to the ENVDIR_CMD variable
+function envdir_source {
+  if [[ -z ${ENVDIR_BIN} ]]; then
+    return
+  fi
+  if [[ ! -d $1 ]]; then
+    return
+  fi
+  if [[ ! -r $1 ]]; then
+    echo "envdir_source: Directory ${1} exists but is not readable." | ts | tee -a ${LOGFILE}
+    return
+  fi
+  echo "Sourcing environment variables from directory '${1}'" | ts | tee -a ${LOGFILE}
+  ENVDIR_CMD="${ENVDIR_CMD} ${ENVDIR_BIN} ${1}"
+}
+
+function set_screen_title {
+  printf "\033k%s\033\\" "$*"
+}
+
+function set_cloe_status {
+  # If running under a 'screen' session, set the window name
+  if [[ ! -z ${EXIT_SIGNALED} ]]; then
+    SIGTERM="[SIGTERM] "
+  fi
+  if [ -n "$STY" ] ; then
+    set_screen_title "${SCRIPT_START_TIME} ($(date -Iseconds)) ${CLOE_RUN_CONF_NAME} ${SIGTERM}-- $*"
+  fi
+}
+
+function check_suspend {
+  local SUSPEND_FILE=${1:-${CLOE_RUN_SUSPEND_FILE:-"${PWD}/suspend.cloe_run"}}
+  local SUSPEND_SLEEP=${2:-${CLOE_RUN_SUSPEND_SLEEP:-"5m"}}
+
+  while [ -f ${SUSPEND_FILE} ];
+  do
+    if [ -z ${SUSPEND_TIME} ]; then
+      SUSPEND_TIME=$(date -Iminutes)
+    fi
+    set_cloe_status "Suspended since ${SUSPEND_TIME}"
+    echo -n "Script is suspended since ${SUSPEND_TIME}. Delete '${SUSPEND_FILE}' file to resume it. " | ts | tee -a ${LOGFILE}
+    if [[ -z `which inotifywait` ]]; then
+      echo "Now entering sleep for ${SUSPEND_SLEEP}..." | tee -a ${LOGFILE}
+      sleep ${SUSPEND_SLEEP}
+    else
+      echo "Waiting indefinitely..." | tee -a ${LOGFILE}
+      inotifywait --event delete ${SUSPEND_FILE}
+    fi
+  done
+  SUSPEND_TIME=""
+}
+
+if [[ -z `which ts` ]]; then
+  echo "Program 'ts' is not installed. You can find it in the 'moreutils' package."
+  exit 1
+fi
+
+SHUTDOWN_FILE="${0}.shutdown"
+trap "EXIT_SIGNALED=1" HUP TERM EXIT
+
+##############################################################################
+# Configuration values
+#
+# Settings are read from environment variables.
+# You can also set them in specific files.
+# Common system-wide settings can be set in CLOE_RUN_SYSTEM_CONF_FILE.
+# Common local directory settings can be set in CLOE_RUN_COMMON_CONF_FILE.
+# You can specify a script-level settings file in the CLOE_RUN_CONF_FILE
+# environment variable or passing the configuration file name as the
+# first command argument. If it is not set, script-level conf file will
+# default to "SCRIPTNAME.conf" file.
+
+CLOE_RUN_SYSTEM_CONF_FILE="/etc/default/cloe_run"
+
+# Try to get the configuration filename from the command line parameter
+# first. This takes precedence over environment variable value.
+if [[ ! -z ${1} ]]; then
+  CLOE_RUN_CONF_NAME="${1}"
+fi
+
+CLOE_RUN_COMMON_CONF_FILE="conf/cloe_run.common.conf"
+
+[[ -z ${CLOE_RUN_CONF_NAME} ]] && CLOE_RUN_CONF_NAME="${0}"
+
+CLOE_RUN_CONF_FILE="${CLOE_RUN_CONF_NAME}.conf"
+
+##############################################################################
+
+while [ ! -r $SHUTDOWN_FILE ];
+do
+
+  ############################################################################
+  # Check and perform suspension logic
+  ############################################################################
+  # Check for global "$PWD/suspend.cloe_run" file (default).
+  check_suspend
+  # Check for script-level "$PWD/suspend.<conf-name>" file.
+  check_suspend "${PWD}/suspend.$(basename ${CLOE_RUN_CONF_NAME})"
+  ############################################################################
+
+  ############################################################################
+  # Source configuration files
+  if [[ -r ${CLOE_RUN_SYSTEM_CONF_FILE} ]]; then
+    echo "Sourcing system-wide configuration file '${CLOE_RUN_SYSTEM_CONF_FILE}'." \
+      | ts | tee -a ${LOGFILE}
+    . ${CLOE_RUN_SYSTEM_CONF_FILE}
+  fi
+  envdir_source "${CLOE_RUN_SYSTEM_CONF_FILE}.d"
+
+  if [[ -r ${CLOE_RUN_COMMON_CONF_FILE} ]]; then
+    echo "Sourcing common configuration file '${CLOE_RUN_COMMON_CONF_FILE}'." \
+      | ts | tee -a ${LOGFILE}
+    . ${CLOE_RUN_COMMON_CONF_FILE}
+  fi
+  envdir_source "${CLOE_RUN_COMMON_CONF_FILE}.d"
+
+  if [[ -r ${CLOE_RUN_CONF_FILE} ]]; then
+    echo "Sourcing configuration file '${CLOE_RUN_CONF_FILE}'." \
+      | ts | tee -a ${LOGFILE}
+    . ${CLOE_RUN_CONF_FILE}
+  else
+    echo "Warning: configuration file '${CLOE_RUN_CONF_FILE}' not found." \
+      | ts | tee -a ${LOGFILE}
+  fi
+  envdir_source "${CLOE_RUN_CONF_FILE}.d"
+
+  if [[ -z ${CLOE_RUN_BIN} ]]; then
+    echo "Variable CLOE_RUN_BIN not set. Exiting."
+    exit 1
+  fi
+  ############################################################################
+
+  # Execute the PRE_RUN_COMMAND
+  if [[ ! -z ${PRE_RUN_COMMAND} ]]; then
+    MSG="Executing PRE_RUN_COMMAND: ${PRE_RUN_COMMAND}"
+    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    set_cloe_status ${MSG}
+    ${PRE_RUN_COMMAND} |& ts | tee -a ${LOGFILE}
+  fi
+
+  # Build command options
+  CMD_PARAMS="${CLOE_RUN_PARAMS} ${CLOE_RUN_PARAMS_EXTRA}"
+
+  # Execute script
+  MSG="Executing: ${CLOE_RUN_BIN} ${CMD_PARAMS}"
+  echo ${MSG} |& ts | tee -a ${LOGFILE}
+  set_cloe_status ${MSG}
+  ${ENVDIR_CMD} ${CLOE_RUN_BIN} ${CMD_PARAMS} 2>&1 | ts | tee -a ${LOGFILE}
+
+  # Execute the POST_RUN_COMMAND
+  if [[ ! -z ${POST_RUN_COMMAND} ]]; then
+    MSG="Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}"
+    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    set_cloe_status ${MSG}
+    ${POST_RUN_COMMAND} |& ts | tee -a ${LOGFILE}
+  fi
+
+  if [[ ! -z ${CLOE_RUN_SINGLE} ]]; then
+    MSG="Finished because of single run requested."
+    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    set_cloe_status ${MSG}
+    exit 0
+  fi
+
+  if [[ ! -z ${SLEEP} ]]; then
+    MSG="Sleeping for ${SLEEP}..."
+    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    set_cloe_status ${MSG}
+    sleep ${SLEEP}
+  fi
+
+  if [[ ! -z ${EXIT_SIGNALED} ]]; then
+    MSG="Finished because of exit signal received."
+    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    set_cloe_status ${MSG}
+    exit 0
+  fi
+
+done
+
+MSG="File ${SHUTDOWN_FILE} found. Exiting."
+echo ${MSG} |& ts | tee -a ${LOGFILE}
+set_cloe_status ${MSG}
+rm -v ${SHUTDOWN_FILE}

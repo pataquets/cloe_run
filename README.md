@@ -35,7 +35,15 @@ Note that you must omit the ```.conf``` extension, since it's added automaticall
 
 Execution control
 =================
-TODO
+Suspension
+----------
+There are times when you want to *temporarily* stop the loop from running. This is what ```cloe_run``` means by suspending a loop. This avoids you having to launch the script again when you no longer want it to be stopped, especially when there are lots of them. Also, this allows you to schedule suspension of all or some loops via crontab without needing to keep track of which loops are running to resume them later.
+
+Suspension is triggered by creation of specific, predefined files. The file contents is irrelevant, they can be an empty file. There is a global suspension file and another, conf-file specific one. By default, the global suspension file is ```${PWD}/suspend.cloe_run```, but the file location can be configured via the ```CLOE_RUN_SUSPEND_FILE``` environment variable. There is also a ```${PWD}/suspend.CLOE_RUN_CONF_NAME``` that will only match the configuration file name loops.
+
+If ```cloe_run``` finds any suspension file, it will use the ```inotifywait``` program from the ```inotify-tools``` package, if present to wait for its deletion. If the package is not available, ```cloe_run``` will fall back to do a ```sleep``` for ```CLOE_RUN_SUSPEND_SLEEP``` parameter. The former method has instant resumption, since it doesn't needs the sleep to end to detect that the suspension file has been deleted.
+
+The loop will resume as soon as the suspension file is no longer present.
 
 
 Configuration parameters

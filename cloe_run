@@ -2,6 +2,9 @@
 
 SCRIPT_START_TIME=$(date -Iminutes)
 ENVDIR_BIN=$(which envdir)
+TS_BIN=$(which ts)
+
+trap "EXIT_SIGNALED=1" HUP TERM EXIT
 
 # envdir_source: Builds an envdir command string for a directory
 # and adds it to the ENVDIR_CMD variable
@@ -13,10 +16,10 @@ function envdir_source {
     return
   fi
   if [[ ! -r $1 ]]; then
-    echo "envdir_source: Directory ${1} exists but is not readable." | ts | tee -a ${LOGFILE}
+    echo "envdir_source: Directory ${1} exists but is not readable." | eval ${PIPECMD}
     return
   fi
-  echo "Sourcing environment variables from directory '${1}'" | ts | tee -a ${LOGFILE}
+  echo "Sourcing environment variables from directory '${1}'" | eval ${PIPECMD}
   ENVDIR_CMD="${ENVDIR_CMD} ${ENVDIR_BIN} ${1}"
 }
 
@@ -44,25 +47,44 @@ function check_suspend {
       SUSPEND_TIME=$(date -Iminutes)
     fi
     set_cloe_status "Suspended since ${SUSPEND_TIME}"
-    echo -n "Script is suspended since ${SUSPEND_TIME}. Delete '${SUSPEND_FILE}' file to resume it. " | ts | tee -a ${LOGFILE}
+    echo -n "Script is suspended since ${SUSPEND_TIME}. Delete '${SUSPEND_FILE}' file to resume it. " | eval ${PIPECMD}
     if [[ -z `which inotifywait` ]]; then
-      echo "Now entering sleep for ${SUSPEND_SLEEP}..." | tee -a ${LOGFILE}
+      echo "Now entering sleep for ${SUSPEND_SLEEP}..." | eval ${PIPECMD}
       sleep ${SUSPEND_SLEEP}
     else
-      echo "Waiting indefinitely..." | tee -a ${LOGFILE}
+      echo "Waiting indefinitely..." | eval ${PIPECMD}
       inotifywait --event delete ${SUSPEND_FILE}
     fi
   done
   SUSPEND_TIME=""
 }
 
-if [[ -z `which ts` ]]; then
-  echo "Program 'ts' is not installed. You can find it in the 'moreutils' package."
-  exit 1
+##############################################################################
+# Build PIPECMD string
+#
+# All the output will be piped through this command chain. This allows you
+# to customize the output behaviour, such as disabling output timestamping.
+
+# Allow to disable timestamping.
+if [[ -z ${CLOE_RUN_DISABLE_TIMESTAMP} ]]; then
+  if [[ -z ${TS_BIN} ]]; then
+    echo "Program 'ts' is not installed. You can find it in the 'moreutils' package."
+    exit 1
+  fi
+  PIPECMD=" ts |"
 fi
 
-SHUTDOWN_FILE="${0}.shutdown"
-trap "EXIT_SIGNALED=1" HUP TERM EXIT
+# Add optional, user-supplied commands to pipe chain.
+# Warning: Some commands can break the chain because they do not forward
+# their received input to stdout.
+# Example: using 'logger' without the '--stderr' option.
+if [[ ! -z ${CLOE_RUN_PIPECMD} ]]; then
+  PIPECMD="${PIPECMD} ${CLOE_RUN_PIPECMD} |&"
+fi
+
+# Close PIPECMD with optional output logging to file.
+PIPECMD="${PIPECMD} tee -a ${LOGFILE}"
+##############################################################################
 
 ##############################################################################
 # Configuration values
@@ -92,6 +114,8 @@ CLOE_RUN_CONF_FILE="${CLOE_RUN_CONF_NAME}.conf"
 
 ##############################################################################
 
+SHUTDOWN_FILE="${0}.shutdown"
+
 while [ ! -r $SHUTDOWN_FILE ];
 do
 
@@ -108,30 +132,30 @@ do
   # Source configuration files
   if [[ -r ${CLOE_RUN_SYSTEM_CONF_FILE} ]]; then
     echo "Sourcing system-wide configuration file '${CLOE_RUN_SYSTEM_CONF_FILE}'." \
-      | ts | tee -a ${LOGFILE}
+      | eval ${PIPECMD}
     . ${CLOE_RUN_SYSTEM_CONF_FILE}
   fi
   envdir_source "${CLOE_RUN_SYSTEM_CONF_FILE}.d"
 
   if [[ -r ${CLOE_RUN_COMMON_CONF_FILE} ]]; then
     echo "Sourcing common configuration file '${CLOE_RUN_COMMON_CONF_FILE}'." \
-      | ts | tee -a ${LOGFILE}
+      | eval ${PIPECMD}
     . ${CLOE_RUN_COMMON_CONF_FILE}
   fi
   envdir_source "${CLOE_RUN_COMMON_CONF_FILE}.d"
 
   if [[ -r ${CLOE_RUN_CONF_FILE} ]]; then
     echo "Sourcing configuration file '${CLOE_RUN_CONF_FILE}'." \
-      | ts | tee -a ${LOGFILE}
+      | eval ${PIPECMD}
     . ${CLOE_RUN_CONF_FILE}
   else
     echo "Warning: configuration file '${CLOE_RUN_CONF_FILE}' not found." \
-      | ts | tee -a ${LOGFILE}
+      | eval ${PIPECMD}
   fi
   envdir_source "${CLOE_RUN_CONF_FILE}.d"
 
   if [[ -z ${CLOE_RUN_BIN} ]]; then
-    echo "Variable CLOE_RUN_BIN not set. Exiting."
+    echo "Variable CLOE_RUN_BIN not set. Exiting." | eval ${PIPECMD}
     exit 1
   fi
   ############################################################################
@@ -139,9 +163,9 @@ do
   # Execute the PRE_RUN_COMMAND
   if [[ ! -z ${PRE_RUN_COMMAND} ]]; then
     MSG="Executing PRE_RUN_COMMAND: ${PRE_RUN_COMMAND}"
-    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
-    ${PRE_RUN_COMMAND} |& ts | tee -a ${LOGFILE}
+    ${PRE_RUN_COMMAND} |& eval ${PIPECMD}
   fi
 
   # Build command options
@@ -149,35 +173,35 @@ do
 
   # Execute script
   MSG="Executing: ${CLOE_RUN_BIN} ${CMD_PARAMS}"
-  echo ${MSG} |& ts | tee -a ${LOGFILE}
+  echo ${MSG} |& eval ${PIPECMD}
   set_cloe_status ${MSG}
-  ${ENVDIR_CMD} ${CLOE_RUN_BIN} ${CMD_PARAMS} 2>&1 | ts | tee -a ${LOGFILE}
+  ${ENVDIR_CMD} ${CLOE_RUN_BIN} ${CMD_PARAMS} 2>&1 | eval ${PIPECMD}
 
   # Execute the POST_RUN_COMMAND
   if [[ ! -z ${POST_RUN_COMMAND} ]]; then
     MSG="Executing POST_RUN_COMMAND: ${POST_RUN_COMMAND}"
-    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
-    ${POST_RUN_COMMAND} |& ts | tee -a ${LOGFILE}
+    ${POST_RUN_COMMAND} |& eval ${PIPECMD}
   fi
 
   if [[ ! -z ${CLOE_RUN_SINGLE} ]]; then
     MSG="Finished because of single run requested."
-    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
     exit 0
   fi
 
   if [[ ! -z ${SLEEP} ]]; then
     MSG="Sleeping for ${SLEEP}..."
-    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
     sleep ${SLEEP}
   fi
 
   if [[ ! -z ${EXIT_SIGNALED} ]]; then
     MSG="Finished because of exit signal received."
-    echo ${MSG} |& ts | tee -a ${LOGFILE}
+    echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
     exit 0
   fi
@@ -185,6 +209,6 @@ do
 done
 
 MSG="File ${SHUTDOWN_FILE} found. Exiting."
-echo ${MSG} |& ts | tee -a ${LOGFILE}
+echo ${MSG} |& eval ${PIPECMD}
 set_cloe_status ${MSG}
 rm -v ${SHUTDOWN_FILE}

@@ -9,8 +9,9 @@ Simplifying, it is a tool for running any command in continous loop. ```cloe_run
 - Executing commands before and/or after each loop main command.
 - Doing a single execution by using a specific flag for debugging purposes.
 - Logging command output (both ```STDOUT``` and ```STDERR```) to a file.
+- Customize the execution output's pipe command chain.
 - Displaying execution status in ```screen``` terminal windows.
-- Timestamping each output line.
+- Timestamping each output line using the ```ts``` tool (can be disabled).
 
 Basic usage
 ===========

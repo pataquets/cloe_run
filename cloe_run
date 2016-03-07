@@ -4,7 +4,7 @@ SCRIPT_START_TIME=$(date -Iminutes)
 ENVDIR_BIN=$(which envdir)
 TS_BIN=$(which ts)
 
-trap "EXIT_SIGNALED=1" HUP TERM EXIT
+trap "TERM_SIGNALED=1" TERM EXIT
 
 # envdir_source: Builds an envdir command string for a directory
 # and adds it to the ENVDIR_CMD variable
@@ -28,12 +28,14 @@ function set_screen_title {
 }
 
 function set_cloe_status {
+  local SIGNALS=""
+
   # If running under a 'screen' session, set the window name
-  if [[ ! -z ${EXIT_SIGNALED} ]]; then
-    SIGTERM="[SIGTERM] "
+  if [[ ! -z ${TERM_SIGNALED} ]]; then
+    SIGNALS="${SIGNALS} [SIGTERM] "
   fi
   if [ -n "$STY" ] ; then
-    set_screen_title "${SCRIPT_START_TIME} ($(date -Iseconds)) ${CLOE_RUN_CONF_NAME} ${SIGTERM}-- $*"
+    set_screen_title "${SCRIPT_START_TIME} ($(date -Iseconds)) ${CLOE_RUN_CONF_NAME} ${SIGNALS}-- $*"
   fi
 }
 
@@ -199,8 +201,8 @@ do
     sleep ${SLEEP}
   fi
 
-  if [[ ! -z ${EXIT_SIGNALED} ]]; then
-    MSG="Finished because of exit signal received."
+  if [[ ! -z ${TERM_SIGNALED} ]]; then
+    MSG="Finished because of TERM signal received."
     echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
     exit 0

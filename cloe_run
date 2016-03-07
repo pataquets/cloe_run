@@ -40,7 +40,7 @@ function set_cloe_status {
 }
 
 function check_suspend {
-  local SUSPEND_FILE=${1:-${CLOE_RUN_SUSPEND_FILE:-"${PWD}/suspend.cloe_run"}}
+  local SUSPEND_FILE=${1:-${CLOE_RUN_SUSPEND_FILE:-"${CLOE_RUN_SUSPEND_DIR:-${PWD}}/suspend.cloe_run"}}
   local SUSPEND_SLEEP=${2:-${CLOE_RUN_SUSPEND_SLEEP:-"5m"}}
 
   while [ -f ${SUSPEND_FILE} ];
@@ -127,7 +127,7 @@ do
   # Check for global "$PWD/suspend.cloe_run" file (default).
   check_suspend
   # Check for script-level "$PWD/suspend.<conf-name>" file.
-  check_suspend "${PWD}/suspend.$(basename ${CLOE_RUN_CONF_NAME})"
+  check_suspend "${CLOE_RUN_SUSPEND_DIR:-${PWD}}/suspend.$(basename ${CLOE_RUN_CONF_NAME})"
   ############################################################################
 
   ############################################################################

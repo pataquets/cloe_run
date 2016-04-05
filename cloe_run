@@ -2,9 +2,25 @@
 
 SCRIPT_START_TIME=$(date -Iminutes)
 ENVDIR_BIN=$(which envdir)
+RUNPARTS_BIN=$(which run-parts)
 TS_BIN=$(which ts)
 
 trap "TERM_SIGNALED=1" TERM EXIT
+
+# cloe_run_parts: Run scripts in a directory using run-parts
+function cloe_run_parts {
+  if [[ -z ${RUNPARTS_BIN} ]]; then
+    return
+  fi
+  if [[ ! -d $1 ]]; then
+    return
+  fi
+  if [[ ! -r $1 ]]; then
+    echo "cloe_run_parts: Directory ${1} exists but is not readable." | eval ${PIPECMD}
+    return
+  fi
+  ${RUNPARTS_BIN} --lsbsysinit --verbose -- $1
+}
 
 # envdir_source: Builds an envdir command string for a directory
 # and adds it to the ENVDIR_CMD variable
@@ -171,6 +187,7 @@ do
     set_cloe_status ${MSG}
     ${PRE_RUN_COMMAND} |& eval ${PIPECMD}
   fi
+  cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/pre-run.d" |& eval ${PIPECMD}
 
   # Build command options
   CMD_PARAMS="${CLOE_RUN_PARAMS} ${CLOE_RUN_PARAMS_EXTRA}"
@@ -188,6 +205,7 @@ do
     set_cloe_status ${MSG}
     ${POST_RUN_COMMAND} |& eval ${PIPECMD}
   fi
+  cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/post-run.d" |& eval ${PIPECMD}
 
   if [[ ! -z ${CLOE_RUN_SINGLE} ]]; then
     MSG="Finished because of single run requested."

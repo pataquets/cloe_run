@@ -93,14 +93,15 @@ PIPECMD="${PIPECMD} tee -a ${LOGFILE}"
 #
 # Settings are read from environment variables.
 # You can also set them in specific files.
-# Common system-wide settings can be set in CLOE_RUN_SYSTEM_CONF_FILE.
+# Default system-wide settings can be set in CLOE_RUN_SYSTEM_DEFAULTS_CONF_FILE.
 # Common local directory settings can be set in CLOE_RUN_COMMON_CONF_FILE.
 # You can specify a script-level settings file in the CLOE_RUN_CONF_FILE
 # environment variable or passing the configuration file name as the
 # first command argument. If it is not set, script-level conf file will
 # default to "SCRIPTNAME.conf" file.
 
-CLOE_RUN_SYSTEM_CONF_FILE="/etc/default/cloe_run"
+CLOE_RUN_SYSTEM_CONF_DIR="/etc/cloe_run"
+CLOE_RUN_SYSTEM_DEFAULTS_CONF_FILE="/etc/default/cloe_run"
 
 # Try to get the configuration filename from the command line parameter
 # first. This takes precedence over environment variable value.
@@ -132,12 +133,13 @@ do
 
   ############################################################################
   # Source configuration files
-  if [[ -r ${CLOE_RUN_SYSTEM_CONF_FILE} ]]; then
-    echo "Sourcing system-wide configuration file '${CLOE_RUN_SYSTEM_CONF_FILE}'." \
+  if [[ -r ${CLOE_RUN_SYSTEM_DEFAULTS_CONF_FILE} ]]; then
+    echo "Sourcing system-wide configuration defaults '${CLOE_RUN_SYSTEM_DEFAULTS_CONF_FILE}'." \
       | eval ${PIPECMD}
-    . ${CLOE_RUN_SYSTEM_CONF_FILE}
+    . ${CLOE_RUN_SYSTEM_DEFAULTS_CONF_FILE}
   fi
-  envdir_source "${CLOE_RUN_SYSTEM_CONF_FILE}.d"
+
+  envdir_source "${CLOE_RUN_SYSTEM_CONF_DIR}/envdir.d/"
 
   if [[ -r ${CLOE_RUN_COMMON_CONF_FILE} ]]; then
     echo "Sourcing common configuration file '${CLOE_RUN_COMMON_CONF_FILE}'." \

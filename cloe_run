@@ -133,6 +133,8 @@ CLOE_RUN_CONF_FILE="${CLOE_RUN_CONF_NAME}.conf"
 
 ##############################################################################
 
+cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/first-run.d" |& eval ${PIPECMD}
+
 SHUTDOWN_FILE="${0}.shutdown"
 
 while [ ! -r $SHUTDOWN_FILE ];
@@ -208,6 +210,7 @@ do
   cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/post-run.d" |& eval ${PIPECMD}
 
   if [[ ! -z ${CLOE_RUN_SINGLE} ]]; then
+    cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
     MSG="Finished because of single run requested."
     echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
@@ -222,6 +225,7 @@ do
   fi
 
   if [[ ! -z ${TERM_SIGNALED} ]]; then
+    cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
     MSG="Finished because of TERM signal received."
     echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
@@ -229,6 +233,8 @@ do
   fi
 
 done
+
+cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
 
 MSG="File ${SHUTDOWN_FILE} found. Exiting."
 echo ${MSG} |& eval ${PIPECMD}

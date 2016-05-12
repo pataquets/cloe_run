@@ -217,6 +217,14 @@ do
     exit 0
   fi
 
+  if [[ ! -z ${TERM_SIGNALED} ]]; then
+    cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
+    MSG="Finished because of TERM signal received."
+    echo ${MSG} |& eval ${PIPECMD}
+    set_cloe_status ${MSG}
+    exit 0
+  fi
+
   if [[ ! -z ${SLEEP} ]]; then
     MSG="Sleeping for ${SLEEP}..."
     echo ${MSG} |& eval ${PIPECMD}

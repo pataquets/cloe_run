@@ -47,7 +47,7 @@ function set_cloe_status {
   local SIGNALS=""
 
   # If running under a 'screen' session, set the window name
-  if [[ ! -z ${TERM_SIGNALED} ]]; then
+  if [[ ${TERM_SIGNALED} -gt 0 ]]; then
     SIGNALS="${SIGNALS} [SIGTERM] "
   fi
   if [ -n "$STY" ] ; then
@@ -84,7 +84,7 @@ function check_suspend {
 # to customize the output behaviour, such as disabling output timestamping.
 
 # Allow to disable timestamping.
-if [[ -z ${CLOE_RUN_DISABLE_TIMESTAMP} ]]; then
+if [[ ${CLOE_RUN_DISABLE_TIMESTAMP:=0} -eq 0 ]]; then
   if [[ -z ${TS_BIN} ]]; then
     echo "Program 'ts' is not installed. You can find it in the 'moreutils' package."
     exit 1
@@ -209,7 +209,7 @@ do
   fi
   cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/post-run.d" |& eval ${PIPECMD}
 
-  if [[ ! -z ${CLOE_RUN_SINGLE} ]]; then
+  if [[ ${CLOE_RUN_SINGLE} -gt 0 ]]; then
     cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
     MSG="Finished because of single run requested."
     echo ${MSG} |& eval ${PIPECMD}
@@ -217,7 +217,7 @@ do
     exit 0
   fi
 
-  if [[ ! -z ${TERM_SIGNALED} ]]; then
+  if [[ ${TERM_SIGNALED} -gt 0 ]]; then
     cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
     MSG="Finished because of TERM signal received."
     echo ${MSG} |& eval ${PIPECMD}
@@ -232,7 +232,7 @@ do
     sleep ${SLEEP}
   fi
 
-  if [[ ! -z ${TERM_SIGNALED} ]]; then
+  if [[ ${TERM_SIGNALED} -gt 0 ]]; then
     cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/last-run.d" |& eval ${PIPECMD}
     MSG="Finished because of TERM signal received."
     echo ${MSG} |& eval ${PIPECMD}

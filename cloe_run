@@ -5,7 +5,15 @@ ENVDIR_BIN=$(which envdir)
 RUNPARTS_BIN=$(which run-parts)
 TS_BIN=$(which ts)
 
-trap "TERM_SIGNALED=1" TERM EXIT
+trap "TERM_SIGNALED=1 ; catch_term" TERM EXIT
+
+function catch_term {
+  if [[ ${CLOE_RUN_SLEEP_PID} -gt 0 ]]; then
+    echo "TERM signal received while sleeping. Killing sleep pid:${CLOE_RUN_SLEEP_PID}." | eval ${PIPECMD}
+    kill ${CLOE_RUN_SLEEP_PID}
+    CLOE_RUN_SLEEP_PID=0
+  fi
+}
 
 # cloe_run_parts: Run scripts in a directory using run-parts
 function cloe_run_parts {
@@ -82,6 +90,9 @@ function check_suspend {
 #
 # All the output will be piped through this command chain. This allows you
 # to customize the output behaviour, such as disabling output timestamping.
+#
+# WARNING: Since no configuration file has been sourced yet at this point,
+# configuration values must be set externally before launching cloe_run.
 
 # Allow to disable timestamping.
 if [[ ${CLOE_RUN_DISABLE_TIMESTAMP:=0} -eq 0 ]]; then
@@ -229,7 +240,9 @@ do
     MSG="Sleeping for ${SLEEP}..."
     echo ${MSG} |& eval ${PIPECMD}
     set_cloe_status ${MSG}
-    sleep ${SLEEP}
+    sleep ${SLEEP} &
+    CLOE_RUN_SLEEP_PID=${!}
+    wait ${CLOE_RUN_SLEEP_PID}
   fi
 
   if [[ ${TERM_SIGNALED} -gt 0 ]]; then

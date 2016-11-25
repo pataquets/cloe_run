@@ -214,6 +214,9 @@ do
   export CLOE_RUN_SECONDS=${SECONDS}
   cloe_run_parts "${CLOE_RUN_SYSTEM_CONF_DIR}/pre-run.d" |& eval ${PIPECMD}
 
+  ############################################################################
+  export CLOE_RUN_LOOP_COUNT=$(( ++CLOE_RUN_LOOP_COUNT ))
+
   # Build command options
   CMD_PARAMS="${CLOE_RUN_PARAMS} ${CLOE_RUN_PARAMS_EXTRA}"
 

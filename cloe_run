@@ -187,9 +187,17 @@ do
   fi
   envdir_source "${CLOE_RUN_CONF_FILE}.d"
 
+  if [[ -z ${CLOE_RUN_BIN_DIR} ]]; then
+    CLOE_RUN_BIN_DIR="${CLOE_RUN_SYSTEM_CONF_DIR}/run.d"
+  fi
+
   if [[ -z ${CLOE_RUN_BIN} ]]; then
-    echo "Variable CLOE_RUN_BIN not set. Exiting." | eval ${PIPECMD}
-    exit 1
+    # Look for run-parts executable files at CLOE_RUN_BIN_DIR before complaining
+    # about otherwise mandatory CLOE_RUN_BIN variable being empty.
+    if [ ! $(find ${CLOE_RUN_BIN_DIR} -maxdepth 1 -type f -executable 2> /dev/null) ]; then
+      echo "Variable CLOE_RUN_BIN not set. Exiting." | eval ${PIPECMD}
+      exit 1
+    fi
   fi
   ############################################################################
 
@@ -205,11 +213,15 @@ do
   # Build command options
   CMD_PARAMS="${CLOE_RUN_PARAMS} ${CLOE_RUN_PARAMS_EXTRA}"
 
-  # Execute script
-  MSG="Executing: ${CLOE_RUN_BIN} ${CMD_PARAMS}"
-  echo ${MSG} |& eval ${PIPECMD}
-  set_cloe_status ${MSG}
-  ${ENVDIR_CMD} ${CLOE_RUN_BIN} ${CMD_PARAMS} 2>&1 | eval ${PIPECMD}
+  # Execute main command
+  if [[ ! -z ${CLOE_RUN_BIN} ]]; then
+    MSG="Executing: ${CLOE_RUN_BIN} ${CMD_PARAMS}"
+    echo ${MSG} |& eval ${PIPECMD}
+    set_cloe_status ${MSG}
+    ${ENVDIR_CMD} ${CLOE_RUN_BIN} ${CMD_PARAMS} 2>&1 | eval ${PIPECMD}
+  fi
+  # Execute run-parts main commands
+  cloe_run_parts "${CLOE_RUN_BIN_DIR}" |& eval ${PIPECMD}
 
   # Execute the POST_RUN_COMMAND
   if [[ ! -z ${POST_RUN_COMMAND} ]]; then

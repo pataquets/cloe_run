@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Mimics 'suspend.cloe_run' file functionality using GCP metadata server.
+# Checks for both project and instance 'suspend-cloud_run' metadata key.
+# If found, it waits for it to be changed or deleted to continue.
+# Works only on Google Cloud Platform.
+
+readonly SUSPEND_KEY="suspend-cloe_run${CLOE_RUN_SUPEND_METADATA_KEY_SUFFIX}"
+readonly CURL_OPTS="--fail --location --silent --output /dev/null"
+
+wait_for_metadata () {
+  local readonly METADATA_KEY_URL="http://metadata.google.internal/computeMetadata/v1/${1}/attributes/${SUSPEND_KEY}"
+
+  if [[ -z ${1} ]]; then
+    echo "wait_for_metadata: Must specify 'project' or 'instance' metadata key space."
+    return 1
+  fi
+
+  curl --header 'Metadata-Flavor: Google' ${CURL_OPTS} ${METADATA_KEY_URL} || return 0
+
+  echo "Found ${1} metadata ${SUSPEND_KEY} key present. Awaiting for change to continue..."
+  curl --header 'Metadata-Flavor: Google' ${CURL_OPTS} "${METADATA_KEY_URL}?wait_for_change=true"
+}
+
+wait_for_metadata project
+wait_for_metadata instance
